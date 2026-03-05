@@ -33,7 +33,6 @@ function parseAiDetails(details: string | null) {
   try {
     return JSON.parse(details) as {
       extensions?: string[];
-      cachedSites?: string[];
       tabSwitches?: { switchCount: number; totalAwayMs: number };
       paste?: { pasteCount: number; totalPastedChars: number };
       codeScore?: number;
@@ -54,11 +53,6 @@ function AiDetailsPanel({ details }: { details: string | null }) {
       {info.extensions && info.extensions.length > 0 && (
         <p className="text-red-600">
           Extension: {info.extensions.join(", ")}
-        </p>
-      )}
-      {info.cachedSites && info.cachedSites.length > 0 && (
-        <p className="text-red-600">
-          AI сайт зочилсон: {info.cachedSites.join(", ")}
         </p>
       )}
       {info.tabSwitches && info.tabSwitches.switchCount > 0 && (
@@ -92,7 +86,6 @@ function AiBadge({ submission }: { submission: Submission }) {
   const info = parseAiDetails(submission.aiDetails);
   const parts: string[] = [];
   if (info?.extensions?.length) parts.push(`Ext: ${info.extensions.length}`);
-  if (info?.cachedSites?.length) parts.push(`Site: ${info.cachedSites.join(", ")}`);
   if (info?.tabSwitches?.switchCount) parts.push(`Tab: ${info.tabSwitches.switchCount}x`);
   if (info?.paste?.pasteCount) parts.push(`Paste: ${info.paste.pasteCount}x`);
   if (info?.codeScore && info.codeScore >= 30) parts.push(`Код: ${info.codeScore}%`);

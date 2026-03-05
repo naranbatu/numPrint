@@ -22,26 +22,18 @@ export function SubmitForm() {
     startPasteTracking("code");
   }, []);
 
-  // Background scan every 10 seconds
-  useEffect(() => {
-    const interval = setInterval(() => detectAiExtensions(), 10_000);
-    return () => clearInterval(interval);
-  }, []);
-
   async function handleSubmit(formData: FormData) {
     setStatus({ type: "loading" });
     const code = formData.get("code") as string;
-    const aiResult = await detectAiExtensions(code);
-    const details = {
+    const aiResult = detectAiExtensions(code);
+    formData.set("aiDetected", String(aiResult.detected));
+    formData.set("aiDetails", JSON.stringify({
       extensions: aiResult.extensions,
-      cachedSites: aiResult.cachedSites,
       tabSwitches: aiResult.tabSwitches,
       paste: aiResult.paste,
       codeScore: aiResult.codeScore,
       codeReasons: aiResult.codeReasons,
-    };
-    formData.set("aiDetected", String(aiResult.detected));
-    formData.set("aiDetails", JSON.stringify(details));
+    }));
     const result = await submitCode(formData);
     if (result.success) {
       setStatus({ type: "success", message: "Код амжилттай илгээгдлээ!" });
