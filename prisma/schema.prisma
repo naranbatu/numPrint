@@ -1,0 +1,21 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Submission {
+  id        String   @id @default(cuid())
+  teamName  String
+  problem   String
+  language  String
+  code      String   @db.Text
+  printed   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([teamName])
+  @@index([problem])
+}
