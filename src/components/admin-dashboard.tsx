@@ -33,7 +33,9 @@ function parseAiDetails(details: string | null) {
   try {
     return JSON.parse(details) as {
       extensions?: string[];
-      aiTabs?: string[];
+      cachedSites?: string[];
+      tabSwitches?: { switchCount: number; totalAwayMs: number };
+      paste?: { pasteCount: number; totalPastedChars: number };
       codeScore?: number;
       codeReasons?: string[];
     };
@@ -54,9 +56,19 @@ function AiDetailsPanel({ details }: { details: string | null }) {
           Extension: {info.extensions.join(", ")}
         </p>
       )}
-      {info.aiTabs && info.aiTabs.length > 0 && (
+      {info.cachedSites && info.cachedSites.length > 0 && (
         <p className="text-red-600">
-          AI tab/site: {info.aiTabs.join(", ")}
+          AI сайт зочилсон: {info.cachedSites.join(", ")}
+        </p>
+      )}
+      {info.tabSwitches && info.tabSwitches.switchCount > 0 && (
+        <p className="text-red-600">
+          Tab солисон: {info.tabSwitches.switchCount} удаа ({Math.round(info.tabSwitches.totalAwayMs / 1000)}с нийт)
+        </p>
+      )}
+      {info.paste && info.paste.pasteCount > 0 && (
+        <p className="text-red-600">
+          Paste: {info.paste.pasteCount} удаа ({info.paste.totalPastedChars} тэмдэгт)
         </p>
       )}
       {info.codeScore !== undefined && info.codeScore > 0 && (
@@ -79,8 +91,10 @@ function AiBadge({ submission }: { submission: Submission }) {
 
   const info = parseAiDetails(submission.aiDetails);
   const parts: string[] = [];
-  if (info?.extensions?.length) parts.push(`Extension: ${info.extensions.length}`);
-  if (info?.aiTabs?.length) parts.push(`AI tab: ${info.aiTabs.length}`);
+  if (info?.extensions?.length) parts.push(`Ext: ${info.extensions.length}`);
+  if (info?.cachedSites?.length) parts.push(`Site: ${info.cachedSites.join(", ")}`);
+  if (info?.tabSwitches?.switchCount) parts.push(`Tab: ${info.tabSwitches.switchCount}x`);
+  if (info?.paste?.pasteCount) parts.push(`Paste: ${info.paste.pasteCount}x`);
   if (info?.codeScore && info.codeScore >= 30) parts.push(`Код: ${info.codeScore}%`);
 
   return (

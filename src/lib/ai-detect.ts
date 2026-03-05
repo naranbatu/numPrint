@@ -61,38 +61,140 @@ function checkGlobalVariables(): string[] {
   return found;
 }
 
-// ── AI tab detection (recent visits) ──
+// ── AI site cache timing detection ──
+// If a favicon loads very fast (<50ms), the user likely visited that site recently
+
+const AI_FAVICON_URLS = [
+  { site: "chatgpt.com", url: "https://chatgpt.com/favicon.ico" },
+  { site: "chat.openai.com", url: "https://chat.openai.com/favicon.ico" },
+  { site: "claude.ai", url: "https://claude.ai/favicon.ico" },
+  { site: "gemini.google.com", url: "https://gemini.google.com/favicon.ico" },
+  { site: "copilot.microsoft.com", url: "https://copilot.microsoft.com/favicon.ico" },
+  { site: "perplexity.ai", url: "https://www.perplexity.ai/favicon.ico" },
+  { site: "phind.com", url: "https://www.phind.com/favicon.ico" },
+  { site: "deepseek.com", url: "https://chat.deepseek.com/favicon.ico" },
+  { site: "poe.com", url: "https://poe.com/favicon.ico" },
+  { site: "you.com", url: "https://you.com/favicon.ico" },
+];
+
+const CACHE_THRESHOLD_MS = 50;
+
+function checkCachedAiSites(): Promise<string[]> {
+  const found: string[] = [];
+  const checks = AI_FAVICON_URLS.map(({ site, url }) =>
+    new Promise<void>((resolve) => {
+      const start = performance.now();
+      const img = new Image();
+      img.onload = () => {
+        const elapsed = performance.now() - start;
+        if (elapsed < CACHE_THRESHOLD_MS) {
+          found.push(site);
+        }
+        resolve();
+      };
+      img.onerror = () => resolve();
+      img.src = `${url}?_=${Date.now()}`;
+      setTimeout(resolve, 2000);
+    })
+  );
+  return Promise.all(checks).then(() => found);
+}
+
+// ── Tab switch tracking ──
+// Track how many times and how long user leaves this tab
+
+type TabSwitchData = {
+  switchCount: number;
+  totalAwayMs: number;
+  switches: { left: number; returned: number }[];
+};
+
+const tabData: TabSwitchData = {
+  switchCount: 0,
+  totalAwayMs: 0,
+  switches: [],
+};
+
+let lastHidden = 0;
+
+export function startTabTracking() {
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      lastHidden = Date.now();
+    } else if (lastHidden > 0) {
+      const awayMs = Date.now() - lastHidden;
+      tabData.switchCount++;
+      tabData.totalAwayMs += awayMs;
+      tabData.switches.push({ left: lastHidden, returned: Date.now() });
+      lastHidden = 0;
+    }
+  });
+}
+
+export function getTabSwitchData(): TabSwitchData {
+  return { ...tabData, switches: [...tabData.switches] };
+}
+
+// ── Paste detection ──
+// Track if user pastes code vs typing it
+
+type PasteData = {
+  pasteCount: number;
+  totalPastedChars: number;
+  pastes: { time: number; length: number }[];
+};
+
+const pasteData: PasteData = {
+  pasteCount: 0,
+  totalPastedChars: 0,
+  pastes: [],
+};
+
+export function startPasteTracking(textareaId: string) {
+  const observer = new MutationObserver(() => {
+    const el = document.getElementById(textareaId);
+    if (el) {
+      el.addEventListener("paste", (e) => {
+        const clipData = (e as ClipboardEvent).clipboardData;
+        const text = clipData?.getData("text") || "";
+        pasteData.pasteCount++;
+        pasteData.totalPastedChars += text.length;
+        pasteData.pastes.push({ time: Date.now(), length: text.length });
+      });
+      observer.disconnect();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  // Also try immediately
+  const el = document.getElementById(textareaId);
+  if (el) {
+    el.addEventListener("paste", (e) => {
+      const clipData = (e as ClipboardEvent).clipboardData;
+      const text = clipData?.getData("text") || "";
+      pasteData.pasteCount++;
+      pasteData.totalPastedChars += text.length;
+      pasteData.pastes.push({ time: Date.now(), length: text.length });
+    });
+  }
+}
+
+export function getPasteData(): PasteData {
+  return { ...pasteData, pastes: [...pasteData.pastes] };
+}
+
+// ── Referrer & storage checks ──
 
 const AI_SITES = [
   "chat.openai.com", "chatgpt.com",
   "claude.ai", "anthropic.com",
   "gemini.google.com", "bard.google.com",
   "copilot.microsoft.com", "copilot.github.com",
-  "perplexity.ai",
-  "phind.com",
-  "codeium.com",
-  "you.com",
-  "poe.com",
+  "perplexity.ai", "phind.com", "codeium.com",
+  "you.com", "poe.com",
   "deepseek.com", "chat.deepseek.com",
-  "huggingface.co/chat",
-  "cursor.com",
+  "huggingface.co/chat", "cursor.com",
 ];
-
-function checkPerformanceEntries(): string[] {
-  const found: string[] = [];
-  try {
-    const entries = performance.getEntriesByType("resource") as PerformanceResourceTiming[];
-    for (const entry of entries) {
-      for (const site of AI_SITES) {
-        if (entry.name.includes(site)) {
-          found.push(site);
-          break;
-        }
-      }
-    }
-  } catch { /* not supported */ }
-  return [...new Set(found)];
-}
 
 function checkReferrer(): string | null {
   try {
@@ -104,16 +206,8 @@ function checkReferrer(): string | null {
   return null;
 }
 
-function checkRecentAiVisits(): string[] {
+function checkStorageTraces(): string[] {
   const found: string[] = [];
-
-  const referrer = checkReferrer();
-  if (referrer) found.push(`referrer:${referrer}`);
-
-  const perfHits = checkPerformanceEntries();
-  for (const hit of perfHits) found.push(`resource:${hit}`);
-
-  // Check localStorage/sessionStorage for AI tool traces
   try {
     const storageKeys = [
       ...Object.keys(localStorage),
@@ -127,13 +221,12 @@ function checkRecentAiVisits(): string[] {
       const keyLower = key.toLowerCase();
       for (const pattern of aiPatterns) {
         if (keyLower.includes(pattern)) {
-          found.push(`storage:${key}`);
+          found.push(key);
           break;
         }
       }
     }
   } catch { /* blocked */ }
-
   return found;
 }
 
@@ -160,7 +253,7 @@ const AI_COMMENT_PATTERNS = [
 ];
 
 const AI_CODE_PATTERNS = [
-  /\/\/\s*.*\n\s*\/\/\s*.*\n\s*\/\/\s*.*/,  // 3+ consecutive comments
+  /\/\/\s*.*\n\s*\/\/\s*.*\n\s*\/\/\s*.*/,
   /\bdef\s+solve\b/i,
   /\bdef\s+main\b.*\bsolve\b/i,
   /\bint\s+main\s*\(\s*\)\s*\{[\s\S]*?\/\//,
@@ -172,7 +265,6 @@ export function analyzeCodeForAi(code: string): { score: number; reasons: string
   const reasons: string[] = [];
   let score = 0;
 
-  // Check comment patterns
   for (const pattern of AI_COMMENT_PATTERNS) {
     if (pattern.test(code)) {
       score += 15;
@@ -180,15 +272,13 @@ export function analyzeCodeForAi(code: string): { score: number; reasons: string
     }
   }
 
-  // Check code patterns
   for (const pattern of AI_CODE_PATTERNS) {
     if (pattern.test(code)) {
       score += 10;
-      reasons.push(`code_pattern`);
+      reasons.push("code_pattern");
     }
   }
 
-  // High comment-to-code ratio
   const lines = code.split("\n");
   const commentLines = lines.filter((l) => {
     const trimmed = l.trim();
@@ -200,7 +290,6 @@ export function analyzeCodeForAi(code: string): { score: number; reasons: string
     reasons.push(`high_comment_ratio:${(ratio * 100).toFixed(0)}%`);
   }
 
-  // Very consistent line lengths (AI tends to wrap uniformly)
   const codeLengths = lines.filter((l) => l.trim().length > 0).map((l) => l.length);
   if (codeLengths.length > 10) {
     const avg = codeLengths.reduce((a, b) => a + b, 0) / codeLengths.length;
@@ -220,7 +309,9 @@ export function analyzeCodeForAi(code: string): { score: number; reasons: string
 export type DetectResult = {
   detected: boolean;
   extensions: string[];
-  aiTabs: string[];
+  cachedSites: string[];
+  tabSwitches: TabSwitchData;
+  paste: PasteData;
   codeScore: number;
   codeReasons: string[];
 };
@@ -229,20 +320,35 @@ export async function detectAiExtensions(code?: string): Promise<DetectResult> {
   const domHits = checkDomElements();
   const globalHits = checkGlobalVariables();
   const extensionHits = await checkExtensionResources();
-  const aiTabHits = checkRecentAiVisits();
+  const cachedSites = await checkCachedAiSites();
+
+  const referrer = checkReferrer();
+  const storageHits = checkStorageTraces();
 
   const extensions = [
     ...domHits.map((s) => `dom:${s}`),
     ...globalHits.map((s) => `global:${s}`),
     ...extensionHits.map((s) => `ext:${s}`),
+    ...storageHits.map((s) => `storage:${s}`),
+    ...(referrer ? [`referrer:${referrer}`] : []),
   ];
 
+  const tabs = getTabSwitchData();
+  const paste = getPasteData();
   const codeAnalysis = code ? analyzeCodeForAi(code) : { score: 0, reasons: [] };
 
+  const detected =
+    extensions.length > 0 ||
+    cachedSites.length > 0 ||
+    tabs.switchCount >= 2 ||
+    codeAnalysis.score >= 30;
+
   return {
-    detected: extensions.length > 0 || aiTabHits.length > 0 || codeAnalysis.score >= 30,
+    detected,
     extensions,
-    aiTabs: aiTabHits,
+    cachedSites,
+    tabSwitches: tabs,
+    paste,
     codeScore: codeAnalysis.score,
     codeReasons: codeAnalysis.reasons,
   };

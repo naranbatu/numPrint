@@ -3,30 +3,28 @@
 import { useState, useRef, useEffect } from "react";
 import { submitCode } from "@/lib/actions";
 import { TEAMS, PROBLEMS, LANGUAGES } from "@/lib/config";
-import { detectAiExtensions, type DetectResult } from "@/lib/ai-detect";
+import {
+  detectAiExtensions,
+  startTabTracking,
+  startPasteTracking,
+} from "@/lib/ai-detect";
 
 export function SubmitForm() {
   const formRef = useRef<HTMLFormElement>(null);
-  const aiResultRef = useRef<DetectResult>({
-    detected: false,
-    extensions: [],
-    aiTabs: [],
-    codeScore: 0,
-    codeReasons: [],
-  });
   const [status, setStatus] = useState<{
     type: "idle" | "loading" | "success" | "error";
     message?: string;
   }>({ type: "idle" });
 
-  // Scan for AI extensions on mount and every 10 seconds
+  // Start tracking on mount
   useEffect(() => {
-    async function scan() {
-      const result = await detectAiExtensions();
-      aiResultRef.current = result;
-    }
-    scan();
-    const interval = setInterval(scan, 10_000);
+    startTabTracking();
+    startPasteTracking("code");
+  }, []);
+
+  // Background scan every 10 seconds
+  useEffect(() => {
+    const interval = setInterval(() => detectAiExtensions(), 10_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -36,7 +34,9 @@ export function SubmitForm() {
     const aiResult = await detectAiExtensions(code);
     const details = {
       extensions: aiResult.extensions,
-      aiTabs: aiResult.aiTabs,
+      cachedSites: aiResult.cachedSites,
+      tabSwitches: aiResult.tabSwitches,
+      paste: aiResult.paste,
       codeScore: aiResult.codeScore,
       codeReasons: aiResult.codeReasons,
     };
