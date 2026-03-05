@@ -34,9 +34,12 @@ export async function submitCode(formData: FormData): Promise<SubmitResult> {
     return { success: false, error: "Код хоосон байна" };
   }
 
+  const aiDetected = formData.get("aiDetected") === "true";
+  const aiDetails = (formData.get("aiDetails") as string) || null;
+
   try {
     await prisma.submission.create({
-      data: { teamName, problem, language, code },
+      data: { teamName, problem, language, code, aiDetected, aiDetails },
     });
     return { success: true };
   } catch (error) {
@@ -52,6 +55,8 @@ export type Submission = {
   language: string;
   code: string;
   printed: boolean;
+  aiDetected: boolean;
+  aiDetails: string | null;
   createdAt: string;
 };
 

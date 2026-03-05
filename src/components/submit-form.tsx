@@ -1,18 +1,47 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { submitCode } from "@/lib/actions";
 import { TEAMS, PROBLEMS, LANGUAGES } from "@/lib/config";
+import { detectAiExtensions, type DetectResult } from "@/lib/ai-detect";
 
 export function SubmitForm() {
   const formRef = useRef<HTMLFormElement>(null);
+  const aiResultRef = useRef<DetectResult>({
+    detected: false,
+    extensions: [],
+    aiTabs: [],
+    codeScore: 0,
+    codeReasons: [],
+  });
   const [status, setStatus] = useState<{
     type: "idle" | "loading" | "success" | "error";
     message?: string;
   }>({ type: "idle" });
 
+  // Scan for AI extensions on mount and every 10 seconds
+  useEffect(() => {
+    async function scan() {
+      const result = await detectAiExtensions();
+      aiResultRef.current = result;
+    }
+    scan();
+    const interval = setInterval(scan, 10_000);
+    return () => clearInterval(interval);
+  }, []);
+
   async function handleSubmit(formData: FormData) {
     setStatus({ type: "loading" });
+    const code = formData.get("code") as string;
+    const aiResult = await detectAiExtensions(code);
+    const details = {
+      extensions: aiResult.extensions,
+      aiTabs: aiResult.aiTabs,
+      codeScore: aiResult.codeScore,
+      codeReasons: aiResult.codeReasons,
+    };
+    formData.set("aiDetected", String(aiResult.detected));
+    formData.set("aiDetails", JSON.stringify(details));
     const result = await submitCode(formData);
     if (result.success) {
       setStatus({ type: "success", message: "Код амжилттай илгээгдлээ!" });

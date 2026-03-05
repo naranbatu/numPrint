@@ -28,6 +28,71 @@ function RemainingTime({ createdAt, now }: { createdAt: string; now: number }) {
   );
 }
 
+function parseAiDetails(details: string | null) {
+  if (!details) return null;
+  try {
+    return JSON.parse(details) as {
+      extensions?: string[];
+      aiTabs?: string[];
+      codeScore?: number;
+      codeReasons?: string[];
+    };
+  } catch {
+    return null;
+  }
+}
+
+function AiDetailsPanel({ details }: { details: string | null }) {
+  const info = parseAiDetails(details);
+  if (!info) return <p className="text-xs text-red-600 mt-1">AI илэрсэн</p>;
+
+  return (
+    <div className="mt-2 bg-red-50 rounded-lg p-2 text-xs space-y-1">
+      <p className="font-medium text-red-700">AI илэрсэн:</p>
+      {info.extensions && info.extensions.length > 0 && (
+        <p className="text-red-600">
+          Extension: {info.extensions.join(", ")}
+        </p>
+      )}
+      {info.aiTabs && info.aiTabs.length > 0 && (
+        <p className="text-red-600">
+          AI tab/site: {info.aiTabs.join(", ")}
+        </p>
+      )}
+      {info.codeScore !== undefined && info.codeScore > 0 && (
+        <p className="text-red-600">
+          Код AI оноо: {info.codeScore}% {info.codeReasons?.length ? `(${info.codeReasons.join(", ")})` : ""}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function AiBadge({ submission }: { submission: Submission }) {
+  if (!submission.aiDetected) {
+    return (
+      <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+        Цэвэр
+      </span>
+    );
+  }
+
+  const info = parseAiDetails(submission.aiDetails);
+  const parts: string[] = [];
+  if (info?.extensions?.length) parts.push(`Extension: ${info.extensions.length}`);
+  if (info?.aiTabs?.length) parts.push(`AI tab: ${info.aiTabs.length}`);
+  if (info?.codeScore && info.codeScore >= 30) parts.push(`Код: ${info.codeScore}%`);
+
+  return (
+    <span
+      className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 cursor-help"
+      title={parts.join(" | ")}
+    >
+      Илэрсэн
+    </span>
+  );
+}
+
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, "&amp;")
@@ -234,6 +299,9 @@ export function AdminDashboard() {
                 Үлдсэн
               </th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">
+                AI
+              </th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">
                 Төлөв
               </th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">
@@ -250,6 +318,9 @@ export function AdminDashboard() {
                 <td className="px-4 py-3">{s.language}</td>
                 <td className="px-4 py-3">
                   <RemainingTime createdAt={s.createdAt} now={now} />
+                </td>
+                <td className="px-4 py-3">
+                  <AiBadge submission={s} />
                 </td>
                 <td className="px-4 py-3">
                   <span
@@ -298,7 +369,7 @@ export function AdminDashboard() {
             {filtered.length === 0 && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-4 py-8 text-center text-gray-400"
                 >
                   Илгээлт байхгүй байна
@@ -321,6 +392,9 @@ export function AdminDashboard() {
                   {selectedCode.language} |{" "}
                   {new Date(selectedCode.createdAt).toLocaleString("mn-MN")}
                 </p>
+                {selectedCode.aiDetected && (
+                  <AiDetailsPanel details={selectedCode.aiDetails} />
+                )}
               </div>
               <div className="flex gap-2">
                 <button

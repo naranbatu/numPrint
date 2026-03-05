@@ -12,9 +12,11 @@ model Submission {
   teamName  String
   problem   String
   language  String
-  code      String   @db.Text
-  printed   Boolean  @default(false)
-  createdAt DateTime @default(now())
+  code       String   @db.Text
+  printed    Boolean  @default(false)
+  aiDetected Boolean  @default(false)
+  aiDetails  String?  @db.Text
+  createdAt  DateTime @default(now())
 
   @@index([teamName])
   @@index([problem])
